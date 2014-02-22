@@ -4,7 +4,7 @@ To build run:
 	cd ls/ && make
 
 To run run:
-	./ls [-RG] [DIR1 ...]
+	./ls [-RGla] [DIR1 ...]
 
 To clear run:
 	make clear
