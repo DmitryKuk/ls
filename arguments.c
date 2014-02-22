@@ -18,6 +18,12 @@ int arguments_init(arguments *args, int *argc_p, char ***argv_p)
 		case 'R':
 			args->recursive = 1;
 			break;
+		case 'l':
+			args->long_format = 1;
+			break;
+		case 'a':
+			args->all = 1;
+			break;
 		default:
 			error_str("Incorrect argument!");
 			return STATUS_INCORRECT_ARGUMENT;

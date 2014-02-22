@@ -9,13 +9,17 @@
 #include "error.h"	// error_str
 
 
-#define GETOPT_STRING "GR"	// Смотри arguments.c!!!
+#define GETOPT_STRING "GRla"	// Смотри arguments.c!!!
 // -G  Цветная печать
 // -R  Рекурсивно обрабатывать подкаталоги
+// -l  Длинный формат вывода
+// -a  Печатать все файлы, учитывая .*
 
 struct _arguments {
 	char colors;
 	char recursive;
+	char long_format;
+	char all;
 };
 
 typedef struct _arguments arguments;

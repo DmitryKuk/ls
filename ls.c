@@ -2,6 +2,7 @@
 
 static int ls_dispatcher(const arguments *args, const char *path, char recursive, char as_file);
 
+
 static int print_filename_color(char type)
 {
 	switch (type) {
@@ -19,9 +20,7 @@ static int print_filename_color(char type)
 
 static int ls_file(const arguments *args, const char *path, struct stat *stat_buf)
 {
-	const char *path2 = path;
-	char s[] = "----------";	
-	
+	char s[] = "----------";
 	
 	// Определение типа файла
 	switch(stat_buf->st_mode & S_IFMT) {
@@ -36,100 +35,96 @@ static int ls_file(const arguments *args, const char *path, struct stat *stat_bu
     }
 	
 	
-	// Определение прав доступа
-	if (stat_buf->st_mode & S_IRUSR) s[1] = 'r';
-	if (stat_buf->st_mode & S_IWUSR) s[2] = 'w';
-	if (stat_buf->st_mode & S_IXUSR) s[3] = 'x';
-	if (stat_buf->st_mode & S_IRGRP) s[4] = 'r';
-	if (stat_buf->st_mode & S_IWGRP) s[5] = 'w';
-	if (stat_buf->st_mode & S_IXGRP) s[6] = 'x';
-	if (stat_buf->st_mode & S_IROTH) s[7] = 'r';
-	if (stat_buf->st_mode & S_IWOTH) s[8] = 'w';
-	if (stat_buf->st_mode & S_IXOTH) s[9] = 'x';
-	
-	
-	// Получаем информацию о владельце
-	struct passwd *user_data = getpwuid(stat_buf->st_uid);
-	if (user_data == NULL) {
-		error_errno(NULL);
-		return STATUS_ERROR;
-	}
-	
-	struct group *group_data = getgrgid(stat_buf->st_gid);
-	if (group_data == NULL) {
-		error_errno(NULL);
-		return STATUS_ERROR;
-	}
-	
-	const char *name = user_data->pw_name,
-			   *group = group_data->gr_name;
-	
-	
-	// Форматируем время последнего изменения
-	char datestring[256];
-	struct tm *tm = localtime(&stat_buf->st_mtime);	// st_mtime - время последнего изменения
-	strftime(datestring, sizeof(datestring), nl_langinfo(D_T_FMT), tm);
-	
-	// Суффиксы размеров
-	static char size_suff[] = "BKMGTP";	// Байты, килобайты, мегабайты, гигабайты, терабайты, петабайты
-	
 	// Отбрасываем часть пути (кроме имени файла)
-//#if SHORT_FILE_NAMES
 	if (!args->recursive) {
 		const char *tmp = path;
 		while (*tmp != '\0')
 			if (*tmp == '/' && *(tmp + 1) != '\0') path = ++tmp;	// tmp -> ".../..."
 			else ++tmp;
 	}
-//#endif	// SHORT_FILE_NAMES
 	
 	
-	// Печатаем отчёт с приведением размера файла к удобочитаемому виду
-	if (stat_buf->st_size < 1000) {
-		printf("%s %4u %s  %s %5lld%c %s ", s, (unsigned int)stat_buf->st_nlink, name, group, (long long int)stat_buf->st_size, size_suff[0], datestring);
-		if (args->colors) print_filename_color(s[0]);
-		printf("%s", path);
-		if (s[0] == 'l') {
-			printf("  ->  ");
-			struct stat sb;
-			char *linkname;
-			ssize_t r;
-			lstat(path2, &sb);
-			
-			linkname = malloc(sb.st_size + 1);
-			
-			r = readlink(path2, linkname, sb.st_size + 1);
-			
-			linkname[sb.st_size] = '\0';
-			
-			printf("%s", linkname);			
-		}
-		if (args->colors) printf("%s", FG_COLOR);
-		putchar('\n');
-	} else {
-		double size = stat_buf->st_size;
-		int i = 0;
-		while (size > 1000 && i < sizeof(size_suff)) ++i, size /= 1024;
-		if (i >= sizeof(size_suff)) --i, size *= 1024;
+	if (args->long_format) {
+		// Определение прав доступа
+		if (stat_buf->st_mode & S_IRUSR) s[1] = 'r';
+		if (stat_buf->st_mode & S_IWUSR) s[2] = 'w';
+		if (stat_buf->st_mode & S_IXUSR) s[3] = 'x';
+		if (stat_buf->st_mode & S_IRGRP) s[4] = 'r';
+		if (stat_buf->st_mode & S_IWGRP) s[5] = 'w';
+		if (stat_buf->st_mode & S_IXGRP) s[6] = 'x';
+		if (stat_buf->st_mode & S_IROTH) s[7] = 'r';
+		if (stat_buf->st_mode & S_IWOTH) s[8] = 'w';
+		if (stat_buf->st_mode & S_IXOTH) s[9] = 'x';
 		
-		printf("%s %4u %s  %s %5.1lf%c %s ", s, (unsigned int)stat_buf->st_nlink, name, group, size, size_suff[i], datestring);
+		
+		// Получаем информацию о владельце
+		struct passwd *user_data = getpwuid(stat_buf->st_uid);
+		if (user_data == NULL) {
+			error_errno(NULL);
+			return STATUS_ERROR;
+		}
+		
+		struct group *group_data = getgrgid(stat_buf->st_gid);
+		if (group_data == NULL) {
+			error_errno(NULL);
+			return STATUS_ERROR;
+		}
+		
+		const char *name = user_data->pw_name,
+				   *group = group_data->gr_name;
+		
+		// Форматируем время последнего изменения
+		char datestring[256];
+		struct tm *tm = localtime(&stat_buf->st_mtime);	// st_mtime - время последнего изменения
+		strftime(datestring, sizeof(datestring), nl_langinfo(D_T_FMT), tm);
+		
+		// Суффиксы размеров
+		static char size_suff[] = "BKMGTP";	// Байты, килобайты, мегабайты, гигабайты, терабайты, петабайты
+		
+		// Печатаем отчёт с приведением размера файла к удобочитаемому виду
+		if (stat_buf->st_size < 1024) {
+			printf("%s %4u %s  %s %5lld%c %s ", s, (unsigned int)stat_buf->st_nlink, name, group, (long long int)stat_buf->st_size, size_suff[0], datestring);
+			if (args->colors) print_filename_color(s[0]);
+			printf("%s", path);
+			if (s[0] == 'l') {
+				struct stat stat_buf2;
+				char *linkname;
+				lstat(path, &stat_buf2);
+				
+				linkname = malloc(stat_buf2.st_size + 1);
+				readlink(path, linkname, stat_buf2.st_size + 1);
+				linkname[stat_buf2.st_size] = '\0';
+				
+				printf("  ->  %s", linkname);
+			}
+			if (args->colors) printf("%s", FG_COLOR);
+			putchar('\n');
+		} else {
+			double size = stat_buf->st_size;
+			int i = 0;
+			while (size > 1024 && i < sizeof(size_suff)) ++i, size /= 1024;
+			if (i >= sizeof(size_suff)) --i, size *= 1024;
+		
+			printf("%s %4u %s  %s %5.1lf%c %s ", s, (unsigned int)stat_buf->st_nlink, name, group, size, size_suff[i], datestring);
+			if (args->colors) print_filename_color(s[0]);
+			printf("%s", path);
+			if (s[0] == 'l') {
+				struct stat stat_buf2;
+				char *linkname;
+				lstat(path, &stat_buf2);
+				
+				linkname = malloc(stat_buf2.st_size + 1);
+				readlink(path, linkname, stat_buf2.st_size + 1);
+				linkname[stat_buf2.st_size] = '\0';
+				
+				printf("  ->  %s", linkname);
+			}
+			if (args->colors) printf("%s", FG_COLOR);
+			putchar('\n');
+		}
+	} else {
 		if (args->colors) print_filename_color(s[0]);
 		printf("%s", path);
-		if (s[0] == 'l') {
-			printf("  ->  ");
-			struct stat sb;
-			char *linkname;
-			ssize_t r;
-			lstat(path2, &sb);
-			
-			linkname = malloc(sb.st_size + 1);
-			
-			r = readlink(path2, linkname, sb.st_size + 1);
-			
-			linkname[sb.st_size] = '\0';
-			
-			printf("%s", linkname);			
-		}
 		if (args->colors) printf("%s", FG_COLOR);
 		putchar('\n');
 	}
@@ -154,7 +149,7 @@ static int ls_dir(const arguments *args, const char *path)
 	struct dirent *dp;
 	while ((dp = readdir(dir_in)) != NULL) {	// Считываем записи из директории
 		// Пропускаем директории ".*"
-		if (dp->d_name[0] == '.')
+		if (dp->d_name[0] == '.' && (!args->all || dp->d_name[1] == '\0' || (dp->d_name[1] == '.' && dp->d_name[2] == '\0')))
 			continue;
 		
 		// Выделяем память
@@ -190,23 +185,16 @@ static int ls_dispatcher(const arguments *args, const char *path, char recursive
 {
 	struct stat stat_buf;
 	int status = lstat(path, &stat_buf);
-	/*
-		Если о самом файле типа связь, то lstat
-		Если о том что лежит по ним, то stat
-	*/
 	if (status) {
 		error_errno(NULL);
 		return STATUS_ERROR;
 	}
 	
-	
 	// Если path - директория и это первый вызов ls или делать рекурсивные вызовы необходимо...
 	if ((stat_buf.st_mode & S_IFDIR) && (!recursive || args->recursive)) {
 		// Печатаем текущую директорию
-//#if SHORT_FILE_NAMES
-	if (!args->recursive)
-		printf("%s\n", path);
-//#endif	// SHORT_FILE_NAMES
+		//if (!args->recursive)
+		//	printf("%s\n", path);
 		if (as_file) ls_file(args, path, &stat_buf);
 		return ls_dir(args, path);	// ...то обрабатываем как директорию
 	}
