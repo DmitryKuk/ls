@@ -146,10 +146,22 @@ static int ls_dir(const arguments *args, const char *path)
 	char *new_path, need_slash = (path[path_len - 1] != '/');
 	if (need_slash) ++path_len;
 	
+	// Получение inode родителя и себя
+	ino_t parent_ino, self_ino;
+	{
+		struct stat st1, st2;
+		strcpy(new_path + new_path_len, ".");
+		stat(new_path, &st1);
+		strcpy(new_path + new_path_len + 1, ".");
+		stat(new_path, &st2);
+		self_ino = st1.st_ino;
+		parent_ino = st2.st_ino;
+	}
+	
 	struct dirent *dp;
-	while ((dp = readdir(dir_in)) != NULL) {	// Считываем записи из директории
-		// Пропускаем директории ".*"
-		if (dp->d_name[0] == '.' && (!args->all || dp->d_name[1] == '\0' || (dp->d_name[1] == '.' && dp->d_name[2] == '\0')))
+	while ((dp = readdir(dir)) != NULL) {
+		// Пропуск ссылок на родителя и себя
+		if (dp->d_ino == parent_ino || dp->d_ino == self_ino)
 			continue;
 		
 		// Выделяем память
