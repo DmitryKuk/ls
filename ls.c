@@ -135,27 +135,39 @@ static int ls_file(const arguments *args, const char *path, struct stat *stat_bu
 static int ls_dir(const arguments *args, const char *path)
 {
 	// Открываем текущую директорию
-	DIR *dir_in = opendir(path);
-	if (dir_in == NULL) {
+	DIR *dir = opendir(path);
+	if (dir == NULL) {
 		error_errno(NULL);
 		return STATUS_ERROR;
 	}
 	
 	// Подготовка к работе с new_path
 	size_t path_len = strlen(path);
-	char *new_path, need_slash = (path[path_len - 1] != '/');
+	char *new_path = NULL, need_slash = (path[path_len - 1] != '/');
 	if (need_slash) ++path_len;
 	
 	// Получение inode родителя и себя
 	ino_t parent_ino, self_ino;
 	{
 		struct stat st1, st2;
-		strcpy(new_path + new_path_len, ".");
+		new_path = malloc(path_len + need_slash + 3);
+		if (new_path == NULL) {
+			error_str("Allocation error!");
+			if (closedir(dir) != 0) error_errno(NULL);
+		}
+		
+		strcpy(new_path, path);
+		if (need_slash)
+			strcpy(new_path + path_len - 1, "/");
+		strcpy(new_path + path_len, ".");
 		stat(new_path, &st1);
-		strcpy(new_path + new_path_len + 1, ".");
+		strcpy(new_path + path_len + 1, ".");
 		stat(new_path, &st2);
 		self_ino = st1.st_ino;
 		parent_ino = st2.st_ino;
+		
+		free(new_path);
+		new_path = NULL;
 	}
 	
 	struct dirent *dp;
@@ -170,7 +182,7 @@ static int ls_dir(const arguments *args, const char *path)
 		new_path = malloc(n);
 		if (new_path == NULL) {
 			error_str("Allocation error!");
-			if (closedir(dir_in) != 0) error_errno(NULL);
+			if (closedir(dir) != 0) error_errno(NULL);
 		}
 		
 		// Формируем new_path
@@ -182,10 +194,11 @@ static int ls_dir(const arguments *args, const char *path)
 		ls_dispatcher(args, new_path, 1, 1);
 		
 		free(new_path);
+		new_path = NULL;
 	}
 	
 	// Закрываем текущую директорию
-	if (closedir(dir_in) != 0) {
+	if (closedir(dir) != 0) {
 		error_errno(NULL);
 		return STATUS_ERROR;
 	}
