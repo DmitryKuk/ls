@@ -172,6 +172,10 @@ static int ls_dir(const arguments *args, const char *path)
 	
 	struct dirent *dp;
 	while ((dp = readdir(dir)) != NULL) {
+		// Пропуск ".*", если надо
+		if (dp->d_name[0] == '.' && !args->all)
+			continue;
+		
 		// Пропуск ссылок на родителя и себя
 		if (dp->d_ino == parent_ino || dp->d_ino == self_ino)
 			continue;
