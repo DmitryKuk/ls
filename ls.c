@@ -24,22 +24,22 @@ static int ls_file(const arguments *args, const char *path, struct stat *stat_bu
 	
 	// Определение типа файла
 	switch(stat_buf->st_mode & S_IFMT) {
+		case S_IFLNK:  s[0] = 'l'; break;	// Символьная ссылка
 		case S_IFDIR:  s[0] = 'd'; break;	// Директория
 		case S_IFSOCK: s[0] = 's'; break;	// Сокет
-		case S_IFLNK:  s[0] = 'l'; break;	// Символьная ссылка
 		case S_IFBLK:  s[0] = 'b'; break;	// Блочное устройство
 		case S_IFCHR:  s[0] = 'c'; break;	// Символьное устройство
 		case S_IFIFO:  s[0] = 'p'; break;	// FIFO (first in - first out)
-		case S_IFREG:  s[0] = '-'; break;	// Обычный файл
-		default: s[0] = '-';
+		case S_IFREG: default:	   break;	// Обычный файл
     }
 	
 	
 	// Отбрасываем часть пути (кроме имени файла)
+	const char *new_path = path;
 	if (!args->recursive) {
-		const char *tmp = path;
+		const char *tmp = new_path;
 		while (*tmp != '\0')
-			if (*tmp == '/' && *(tmp + 1) != '\0') path = ++tmp;	// tmp -> ".../..."
+			if (*tmp == '/' && *(tmp + 1) != '\0') new_path = ++tmp;	// tmp -> ".../..."
 			else ++tmp;
 	}
 	
@@ -55,79 +55,70 @@ static int ls_file(const arguments *args, const char *path, struct stat *stat_bu
 		if (stat_buf->st_mode & S_IROTH) s[7] = 'r';
 		if (stat_buf->st_mode & S_IWOTH) s[8] = 'w';
 		if (stat_buf->st_mode & S_IXOTH) s[9] = 'x';
+		printf("%s  %4u  ", s, (unsigned int)stat_buf->st_nlink);
 		
 		
 		// Получаем информацию о владельце
 		struct passwd *user_data = getpwuid(stat_buf->st_uid);
-		if (user_data == NULL) {
-			error_errno(NULL);
-			return STATUS_ERROR;
-		}
+		if (user_data) printf("%s  ", user_data->pw_name);
+		else printf("%4d  ", stat_buf->st_uid);
 		
 		struct group *group_data = getgrgid(stat_buf->st_gid);
-		if (group_data == NULL) {
-			error_errno(NULL);
-			return STATUS_ERROR;
-		}
+		if (user_data) printf("%s  ", group_data->gr_name);
+		else printf("%4d  ", stat_buf->st_gid);
 		
-		const char *name = user_data->pw_name,
-				   *group = group_data->gr_name;
+		
+		// Суффиксы размеров
+		static char size_suff[] = "BKMGTP";	// Байты, килобайты, мегабайты, гигабайты, терабайты, петабайты
+		if (stat_buf->st_size < 1000) printf("%5lld%c  ", (long long int)stat_buf->st_size, size_suff[0]);
+		else {
+			double size = stat_buf->st_size;
+			unsigned int i;
+			for (i = 0; size > 1000 && i < sizeof(size_suff); ++i)
+				size /= 1024;
+			printf("%5.1lf%c  ", size, size_suff[i]);
+		}
 		
 		// Форматируем время последнего изменения
 		char datestring[256];
 		struct tm *tm = localtime(&stat_buf->st_mtime);	// st_mtime - время последнего изменения
 		strftime(datestring, sizeof(datestring), nl_langinfo(D_T_FMT), tm);
-		
-		// Суффиксы размеров
-		static char size_suff[] = "BKMGTP";	// Байты, килобайты, мегабайты, гигабайты, терабайты, петабайты
-		
-		// Печатаем отчёт с приведением размера файла к удобочитаемому виду
-		if (stat_buf->st_size < 1024) {
-			printf("%s %4u %s  %s %5lld%c %s ", s, (unsigned int)stat_buf->st_nlink, name, group, (long long int)stat_buf->st_size, size_suff[0], datestring);
-			if (args->colors) print_filename_color(s[0]);
-			printf("%s", path);
-			if (s[0] == 'l') {
-				struct stat stat_buf2;
-				char *linkname;
-				lstat(path, &stat_buf2);
-				
-				linkname = malloc(stat_buf2.st_size + 1);
-				readlink(path, linkname, stat_buf2.st_size + 1);
-				linkname[stat_buf2.st_size] = '\0';
-				
-				printf("  ->  %s", linkname);
-			}
-			if (args->colors) printf("%s", FG_COLOR);
-			putchar('\n');
-		} else {
-			double size = stat_buf->st_size;
-			int i = 0;
-			while (size > 1024 && i < sizeof(size_suff)) ++i, size /= 1024;
-			if (i >= sizeof(size_suff)) --i, size *= 1024;
-		
-			printf("%s %4u %s  %s %5.1lf%c %s ", s, (unsigned int)stat_buf->st_nlink, name, group, size, size_suff[i], datestring);
-			if (args->colors) print_filename_color(s[0]);
-			printf("%s", path);
-			if (s[0] == 'l') {
-				struct stat stat_buf2;
-				char *linkname;
-				lstat(path, &stat_buf2);
-				
-				linkname = malloc(stat_buf2.st_size + 1);
-				readlink(path, linkname, stat_buf2.st_size + 1);
-				linkname[stat_buf2.st_size] = '\0';
-				
-				printf("  ->  %s", linkname);
-			}
-			if (args->colors) printf("%s", FG_COLOR);
-			putchar('\n');
-		}
-	} else {
-		if (args->colors) print_filename_color(s[0]);
-		printf("%s", path);
-		if (args->colors) printf("%s", FG_COLOR);
-		putchar('\n');
+		printf("%s  ", datestring);
 	}
+	
+	if (args->colors) print_filename_color(s[0]);
+	printf("%s", new_path);
+	if (args->colors) printf("%s", FG_COLOR);
+		
+	if (args->long_format && s[0] == 'l') {
+		struct stat stat_buf2;
+		char *linkname;
+		if (lstat(path, &stat_buf2)) {
+			putchar('\n');
+			fflush(stdout);
+			error_errno(NULL);
+			return STATUS_ERROR;
+		}
+		
+		linkname = malloc(stat_buf2.st_size + 1);
+		if (linkname == NULL) {
+			error_errno(NULL);
+			return STATUS_ERROR;
+		}
+		
+		if (readlink(path, linkname, stat_buf2.st_size + 1)) {
+			error_errno(NULL);
+			free(linkname);
+			putchar('\n');
+			return STATUS_ERROR;
+		}
+		linkname[stat_buf2.st_size] = '\0';
+		
+		printf(" -> %s", linkname);
+		free(linkname);
+	}
+	
+	putchar('\n');
 	return STATUS_OK;
 }
 
@@ -152,17 +143,22 @@ static int ls_dir(const arguments *args, const char *path)
 		struct stat st1, st2;
 		new_path = malloc(path_len + need_slash + 3);
 		if (new_path == NULL) {
-			error_str("Allocation error!");
+			error_errno(NULL);
 			if (closedir(dir) != 0) error_errno(NULL);
 		}
 		
 		strcpy(new_path, path);
-		if (need_slash)
-			strcpy(new_path + path_len - 1, "/");
+		if (need_slash) new_path[path_len - 1] = '/';
 		strcpy(new_path + path_len, ".");
+		
+		// Получение данных о "."
 		stat(new_path, &st1);
+		
 		strcpy(new_path + path_len + 1, ".");
+		
+		// Получение данных о "..
 		stat(new_path, &st2);
+		
 		self_ino = st1.st_ino;
 		parent_ino = st2.st_ino;
 		
@@ -176,6 +172,9 @@ static int ls_dir(const arguments *args, const char *path)
 		if (dp->d_name[0] == '.' && !args->all)
 			continue;
 		
+		// Пропуск ссылок
+		if (dp->d_type & DT_LNK) continue;
+		
 		// Пропуск ссылок на родителя и себя
 		if (dp->d_ino == parent_ino || dp->d_ino == self_ino)
 			continue;
@@ -185,7 +184,7 @@ static int ls_dir(const arguments *args, const char *path)
 		if (need_slash) ++n;
 		new_path = malloc(n);
 		if (new_path == NULL) {
-			error_str("Allocation error!");
+			error_errno(NULL);
 			if (closedir(dir) != 0) error_errno(NULL);
 		}
 		
@@ -213,17 +212,13 @@ static int ls_dir(const arguments *args, const char *path)
 static int ls_dispatcher(const arguments *args, const char *path, char recursive, char as_file)
 {
 	struct stat stat_buf;
-	int status = lstat(path, &stat_buf);
-	if (status) {
+	if (lstat(path, &stat_buf)) {
 		error_errno(NULL);
 		return STATUS_ERROR;
 	}
 	
 	// Если path - директория и это первый вызов ls или делать рекурсивные вызовы необходимо...
-	if ((stat_buf.st_mode & S_IFDIR) && (!recursive || args->recursive)) {
-		// Печатаем текущую директорию
-		//if (!args->recursive)
-		//	printf("%s\n", path);
+	if (!(stat_buf.st_mode & S_IFLNK) && (stat_buf.st_mode & S_IFDIR) && (!recursive || args->recursive)) {
 		if (as_file) ls_file(args, path, &stat_buf);
 		return ls_dir(args, path);	// ...то обрабатываем как директорию
 	}
